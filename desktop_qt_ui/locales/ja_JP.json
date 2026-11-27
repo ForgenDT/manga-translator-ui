@@ -1532,5 +1532,10 @@
   "desc_colorizer_ai_colorizer_history_pages": "すでに着色済みの前のページを参照画像として現在の AI 着色リクエストに自動添付します。画像のみのコンテキストで、テキストは含まれません。0 に設定すると無効になります。",
   "desc_detector_import_yolo_labels": "manga_translator_work/yolo_labels から画像と同名の YOLO アノテーションファイルを読み込みます。アクティブなワークフローに応じて、テキストボックスの置換やマスクの再生成に使用されます。",
   "label_ai_colorizer_history_pages": "AI着色履歴ページ数",
-  "label_import_yolo_labels": "固定YOLO枠をインポート"
+  "label_import_yolo_labels": "固定YOLO枠をインポート",
+  "Generate PSD Only": "PSDのみ生成",
+  "Start PSD Generation": "PSD生成を開始",
+  "Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering": "ヒント：既存のローカルJSONと修復済み画像を読み込み、編集可能な.psdファイルのみを生成します（検出・OCR・翻訳・画像レンダリングはスキップ）",
+  "Photoshop Required": "Photoshop が必要です",
+  "Adobe Photoshop is required to export PSD files, but no installation was found.\n\nPlease install Photoshop, set the PHOTOSHOP_PATH environment variable, or enable 'Generate PSD Script Only'.": "PSD ファイルの出力には Adobe Photoshop が必要ですが、インストールが見つかりませんでした。\n\nPhotoshop をインストールするか、環境変数 PHOTOSHOP_PATH を設定するか、「PSD スクリプトのみ生成」を有効にしてください。"
 }

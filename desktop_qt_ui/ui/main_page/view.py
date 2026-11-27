@@ -438,6 +438,7 @@ class MainView(QObject):
                         self._t("Upscale Only"),
                         self._t("Inpaint Only"),
                         self._t("Replace Translation"),
+                        self._t("Generate PSD Only"),
                     ]
                 )
                 self.workflow_mode_combo.setCurrentIndex(current_index)

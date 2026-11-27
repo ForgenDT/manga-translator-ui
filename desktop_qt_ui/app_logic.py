@@ -242,9 +242,38 @@ class MainAppLogic(QObject):
             return f"{section_label}: {display_name}"
         return section_label
 
+    def _validate_photoshop_requirement(self, config) -> bool:
+        cli = getattr(config, "cli", None)
+        if cli is None:
+            return True
+        needs_photoshop = (
+            getattr(cli, "export_editable_psd", False)
+            or getattr(cli, "export_psd_only", False)
+        ) and not getattr(cli, "psd_script_only", False)
+        if not needs_photoshop:
+            return True
+
+        from manga_translator.utils.photoshop_export import find_photoshop_executable
+        if find_photoshop_executable():
+            return True
+
+        from PyQt6.QtWidgets import QMessageBox
+        self._ui_log("Photoshop executable not found; PSD export was not started.", "WARNING")
+        QMessageBox.warning(
+            None,
+            self._t("Photoshop Required"),
+            self._t(
+                "Adobe Photoshop is required to export PSD files, but no installation was found.\n\n"
+                "Please install Photoshop, set the PHOTOSHOP_PATH environment variable, or enable 'Generate PSD Script Only'."
+            ),
+        )
+        return False
+
     def _validate_runtime_api_requirements(self, config) -> bool:
         from PyQt6.QtWidgets import QMessageBox
         cli = getattr(config, "cli", None)
+        if cli is not None and getattr(cli, "export_psd_only", False):
+            return True
         if (
             cli is not None
             and getattr(cli, "export_from_local_json", False)
@@ -1938,6 +1967,10 @@ class MainAppLogic(QObject):
             )
             return
 
+        # 若启用了 PSD 导出（且非仅生成脚本），提前检查是否安装了 Photoshop
+        if not self._validate_photoshop_requirement(config):
+            return
+
         # 按当前所选功能精确校验 API Keys
         try:
             if not self._validate_runtime_api_requirements(config):
@@ -3036,6 +3069,9 @@ class TranslationWorker(QObject):
             elif cli_config.get('translate_json_only', False):
                 workflow_mode = 'Translate JSON Only'
                 workflow_tip = 'Tip: Requires existing JSON data. The app reads original text from JSON, translates it, writes results back to JSON, and deletes imagename_original.txt after success'
+            elif cli_config.get('export_psd_only', False):
+                workflow_mode = 'Generate PSD Only'
+                workflow_tip = 'Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering'
                  
                 # TXT导入JSON的预处理已经统一到翻译器入口（manga_translator.py），这里不再需要
 

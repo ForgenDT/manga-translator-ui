@@ -29,6 +29,7 @@ def update_workflow_mode_description(self, index: int | None = None):
         6: "Upscale Only",
         7: "Inpaint Only",
         8: "Replace Translation",
+        9: "Generate PSD Only",
     }
     tip_keys = {
         0: "Tip: Standard translation pipeline with detection, OCR, translation and rendering",
@@ -40,6 +41,7 @@ def update_workflow_mode_description(self, index: int | None = None):
         6: "Tip: Only upscale images, no detection, OCR, translation or rendering",
         7: "Tip: Detect text regions and inpaint to output clean images, no translation or rendering",
         8: "Tip: Place translated images in manga_translator_work/translated_images with matching filenames. The app extracts translated text, matches regions on raw images, inpaints originals, and renders translated text.",
+        9: "Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering",
     }
     try:
         local_json_export = bool(
@@ -169,7 +171,9 @@ def sync_workflow_mode_from_config(self):
         config = self.config_service.get_config()
         self.workflow_mode_combo.blockSignals(True)
         try:
-            if config.cli.replace_translation:
+            if config.cli.export_psd_only:
+                self.workflow_mode_combo.setCurrentIndex(9)
+            elif config.cli.replace_translation:
                 self.workflow_mode_combo.setCurrentIndex(8)
             elif config.cli.inpaint_only:
                 self.workflow_mode_combo.setCurrentIndex(7)
@@ -206,6 +210,7 @@ def on_workflow_mode_changed(self, index: int):
     config.cli.upscale_only = False
     config.cli.inpaint_only = False
     config.cli.replace_translation = False
+    config.cli.export_psd_only = False
 
     if index == 1:
         config.cli.generate_and_export = True
@@ -223,6 +228,8 @@ def on_workflow_mode_changed(self, index: int):
         config.cli.inpaint_only = True
     elif index == 8:
         config.cli.replace_translation = True
+    elif index == 9:
+        config.cli.export_psd_only = True
 
     self.config_service.set_config(config)
     self.config_service.save_config_file()
@@ -237,7 +244,9 @@ def update_start_button_text(self):
 
     try:
         config = self.config_service.get_config()
-        if config.cli.replace_translation:
+        if config.cli.export_psd_only:
+            self.start_button.setText(self._t("Start PSD Generation"))
+        elif config.cli.replace_translation:
             self.start_button.setText(self._t("Start Replace Translation"))
         elif config.cli.inpaint_only:
             self.start_button.setText(self._t("Start Inpainting"))

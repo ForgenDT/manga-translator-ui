@@ -1532,5 +1532,10 @@
   "desc_colorizer_ai_colorizer_history_pages": "이전에 이미 채색된 페이지를 현재 AI 채색 요청의 참조 이미지로 자동 첨부합니다. 텍스트가 아닌 이미지 전용 컨텍스트입니다. 0으로 설정하면 비활성화됩니다.",
   "desc_detector_import_yolo_labels": "manga_translator_work/yolo_labels에서 이미지와 같은 이름의 YOLO 주석 파일을 읽습니다. 활성 워크플로우에 따라 텍스트 상자를 교체하거나 마스크를 재생성하는 데 사용됩니다.",
   "label_ai_colorizer_history_pages": "AI 채색 기록 페이지 수",
-  "label_import_yolo_labels": "고정 YOLO 박스 가져오기"
+  "label_import_yolo_labels": "고정 YOLO 박스 가져오기",
+  "Generate PSD Only": "PSD만 생성",
+  "Start PSD Generation": "PSD 생성 시작",
+  "Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering": "팁: 기존 로컬 JSON과 인페인팅된 이미지를 읽어 편집 가능한 .psd 파일만 생성합니다(검출, OCR, 번역, 이미지 렌더링 건너뜀)",
+  "Photoshop Required": "Photoshop 필요",
+  "Adobe Photoshop is required to export PSD files, but no installation was found.\n\nPlease install Photoshop, set the PHOTOSHOP_PATH environment variable, or enable 'Generate PSD Script Only'.": "PSD 파일을 내보내려면 Adobe Photoshop이 필요하지만 설치된 경로를 찾을 수 없습니다.\n\nPhotoshop을 설치하거나 PHOTOSHOP_PATH 환경 변수를 설정하거나 'PSD 스크립트만 생성'을 활성화하세요."
 }

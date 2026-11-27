@@ -1532,5 +1532,10 @@
   "api_test_error_sakura_base": "Veuillez d'abord configurer SAKURA_API_BASE.",
   "api_test_error_unsupported": "Ce traducteur ne prend pas en charge le test API.",
   "Clear Selected": "Effacer la sélection",
-  "Search fonts…": "Rechercher des polices…"
+  "Search fonts…": "Rechercher des polices…",
+  "Generate PSD Only": "Générer les .PSD uniquement",
+  "Start PSD Generation": "Générer les .PSD",
+  "Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering": "Astuce : lit les JSON locaux et images inpaintées existants pour générer uniquement les fichiers .psd éditables ; aucune détection, OCR, traduction ou rendu d'image",
+  "Photoshop Required": "Photoshop requis",
+  "Adobe Photoshop is required to export PSD files, but no installation was found.\n\nPlease install Photoshop, set the PHOTOSHOP_PATH environment variable, or enable 'Generate PSD Script Only'.": "Adobe Photoshop est requis pour exporter des fichiers PSD, mais aucune installation n'a été trouvée.\n\nVeuillez installer Photoshop, définir la variable d'environnement PHOTOSHOP_PATH ou activer « Générer le script PSD uniquement »."
 }

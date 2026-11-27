@@ -1532,5 +1532,10 @@
   "api_models_error_unsupported": "该翻译器不支持获取模型列表。",
   "api_models_error_failed": "获取模型列表失败：{error}",
   "Clear Selected": "清除选中",
-  "Search fonts…": "搜索字体…"
+  "Search fonts…": "搜索字体…",
+  "Generate PSD Only": "仅生成 PSD",
+  "Start PSD Generation": "开始生成 PSD",
+  "Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering": "提示：仅读取现有本地 JSON 与修复图生成可编辑 .psd 文件；跳过检测、OCR、翻译与图片渲染",
+  "Photoshop Required": "需要安装 Photoshop",
+  "Adobe Photoshop is required to export PSD files, but no installation was found.\n\nPlease install Photoshop, set the PHOTOSHOP_PATH environment variable, or enable 'Generate PSD Script Only'.": "导出 PSD 文件需要安装 Adobe Photoshop，但未检测到已安装的 Photoshop。\n\n请安装 Photoshop、设置 PHOTOSHOP_PATH 环境变量，或启用「仅生成 PSD 脚本」。"
 }

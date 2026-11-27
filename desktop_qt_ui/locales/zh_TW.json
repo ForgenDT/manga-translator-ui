@@ -1532,5 +1532,10 @@
   "Tip: Requires existing JSON data. The app reads original text from JSON, translates it, writes results back to JSON, and deletes imagename_original.txt after success": "提示：需要預先存在 JSON 資料。程式會從 JSON 讀取原文並執行翻譯，完成後回寫 JSON，並刪除圖片名_original.txt。",
   "Unable to validate API Keys (.env). Please check the log and try again.": "無法驗證 API Keys(.env)，請檢查日誌後再重試。",
   "desc_detector_import_yolo_labels": "從 manga_translator_work/yolo_labels 讀取與圖片同名的 YOLO 標註檔案。在不同工作流程下依約定替換檢測框或補生成遮罩。",
-  "label_import_yolo_labels": "匯入固定YOLO框"
+  "label_import_yolo_labels": "匯入固定YOLO框",
+  "Generate PSD Only": "僅生成 PSD",
+  "Start PSD Generation": "開始生成 PSD",
+  "Tip: Reads existing local JSON and inpainted images to generate editable .psd files only; no detection, OCR, translation, or image rendering": "提示：僅讀取現有本地 JSON 與修復圖生成可編輯 .psd 檔案；跳過檢測、OCR、翻譯與圖片渲染",
+  "Photoshop Required": "需要安裝 Photoshop",
+  "Adobe Photoshop is required to export PSD files, but no installation was found.\n\nPlease install Photoshop, set the PHOTOSHOP_PATH environment variable, or enable 'Generate PSD Script Only'.": "匯出 PSD 檔案需要安裝 Adobe Photoshop，但未偵測到已安裝的 Photoshop。\n\n請安裝 Photoshop、設定 PHOTOSHOP_PATH 環境變數，或啟用「僅生成 PSD 腳本」。"
 }
