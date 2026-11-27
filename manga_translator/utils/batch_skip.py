@@ -101,6 +101,24 @@ def _skip_decision(
             )
         return None
 
+    if getattr(translator, "export_psd_only", False):
+        from .photoshop_export import get_psd_output_path
+
+        psd_path = get_psd_output_path(image_path)
+        script_only = bool(getattr(getattr(config, "cli", None), "psd_script_only", False))
+        output_path = (
+            os.path.splitext(psd_path)[0] + "_photoshop_script.jsx"
+            if script_only
+            else psd_path
+        )
+        if os.path.exists(output_path):
+            return SkipDecision(
+                reason="existing_psd",
+                message=f"PSD file already exists: {os.path.basename(output_path)}",
+                output_path=output_path,
+            )
+        return None
+
     output_path = translator._calculate_output_path(image_path, save_info)
     if not os.path.exists(output_path):
         return None

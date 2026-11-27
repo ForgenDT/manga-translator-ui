@@ -456,6 +456,7 @@ class MangaTranslator:
         self.colorize_only = params.get('colorize_only', False)
         self.upscale_only = params.get('upscale_only', False)
         self.inpaint_only = params.get('inpaint_only', False)
+        self.export_psd_only = params.get('export_psd_only', False)
         
         # 替换翻译模式（从已翻译图片复制翻译数据到生肉图片）
         self.replace_translation = params.get('replace_translation', False)
@@ -1044,6 +1045,106 @@ class MangaTranslator:
             except Exception as exc:
                 logger.error(
                     f"Failed to export local {export_label} text for "
+                    f"{os.path.basename(image_name) if image_name else 'unknown input'}: {exc}"
+                )
+                self._mark_context_failure(ctx, exc, stage='export')
+
+            results.append(ctx)
+            self._notify_file_completed(ctx)
+            completed = min(global_offset + len(results), display_total)
+            failed_count = sum(
+                1 for result in results if getattr(result, 'translation_error', None)
+            )
+            await self._report_progress(
+                f"batch:{completed}:{completed}:{display_total}:{failed_count}:{skipped_count}"
+            )
+
+        return results
+
+    async def _export_psd_from_local_json(
+        self,
+        images_with_configs: List[tuple],
+        global_offset: int = 0,
+        global_total: int = None,
+        skipped_count: int = 0,
+    ) -> List[Context]:
+        """Generate editable PSD (or JSX) files from existing local project JSON."""
+        from .utils.photoshop_export import (
+            get_psd_output_path,
+            photoshop_export,
+            resolve_photoshop_font,
+        )
+
+        display_total = global_total if global_total is not None else len(images_with_configs)
+        results: List[Context] = []
+
+        logger.info(
+            "PSD-only mode enabled: reading existing project JSON and inpainted images; "
+            "detection, OCR, translation, and image rendering are skipped."
+        )
+        for image_or_path, config in images_with_configs:
+            await asyncio.sleep(0)
+            self._check_cancelled()
+            image_name = (
+                os.fspath(image_or_path)
+                if isinstance(image_or_path, (str, os.PathLike))
+                else getattr(image_or_path, 'name', None)
+            )
+            ctx = Context()
+            ctx.text_regions = []
+            if image_name:
+                ctx.image_name = image_name
+            if config is not None:
+                ctx.config = config
+
+            try:
+                if not image_name:
+                    raise ValueError("Input image path is unavailable")
+                json_path = find_json_path(image_name)
+                if not json_path:
+                    raise FileNotFoundError(
+                        f"Local project JSON not found for {os.path.basename(image_name)}"
+                    )
+                regions, _, _, _, _, _ = self._load_text_and_regions_from_file(image_name, config)
+                if regions is None:
+                    raise ValueError(
+                        f"Failed to load regions from local JSON: {os.path.basename(json_path)}"
+                    )
+                ctx.text_regions = regions
+                ctx.img_inpainted = None
+
+                psd_path = get_psd_output_path(image_name)
+                cli_cfg = getattr(config, 'cli', None)
+                default_font = resolve_photoshop_font(config)
+                line_spacing = (
+                    getattr(config.render, 'line_spacing', None)
+                    if hasattr(config, 'render')
+                    else None
+                )
+                script_only = bool(getattr(cli_cfg, 'psd_script_only', False))
+                photoshop_export(
+                    psd_path,
+                    ctx,
+                    default_font,
+                    image_name,
+                    self.verbose,
+                    self._result_path,
+                    line_spacing,
+                    script_only,
+                )
+                output_target = (
+                    os.path.splitext(psd_path)[0] + "_photoshop_script.jsx"
+                    if script_only
+                    else psd_path
+                )
+                ctx.success = True
+                ctx.output_path = output_target
+                logger.info(
+                    f"  -> ✅ [PSD Only] Exported: {os.path.basename(output_target)}"
+                )
+            except Exception as exc:
+                logger.error(
+                    f"Failed to generate PSD for "
                     f"{os.path.basename(image_name) if image_name else 'unknown input'}: {exc}"
                 )
                 self._mark_context_failure(ctx, exc, stage='export')
@@ -3675,6 +3776,15 @@ class MangaTranslator:
             return plan.merge_results([])
 
         batch_size = batch_size or self.batch_size
+        if self.export_psd_only:
+            contexts = await self._export_psd_from_local_json(
+                images_with_configs,
+                global_offset=processing_offset,
+                global_total=display_total,
+                skipped_count=skipped_count,
+            )
+            return plan.merge_results(contexts)
+
         is_text_export_mode = self.generate_and_export or (self.template and self.save_text)
         if self.export_from_local_json and is_text_export_mode:
             contexts = await self._export_text_from_local_json(
@@ -3720,6 +3830,7 @@ class MangaTranslator:
             or self.colorize_only
             or self.upscale_only
             or self.inpaint_only
+            or self.export_psd_only
             or self.replace_translation
         )
         effective_batch_concurrent = self.batch_concurrent and not has_incompatible_mode

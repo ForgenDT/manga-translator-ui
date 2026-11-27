@@ -430,6 +430,8 @@ class CliConfig(BaseModel):
     """Save translation results to manga_translator_work/result/ subdirectory in the source image directory."""
     psd_script_only: bool = False
     """Only generate JSX script without executing Photoshop"""
+    export_psd_only: bool = False
+    """Export editable PSD files only from existing local JSON without detection, OCR, translation, or rendering"""
     replace_translation: bool = False
     """Replace translation mode: apply translation from one image to another raw image"""
     translate_json_only: bool = False
