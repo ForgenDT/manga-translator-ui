@@ -56,16 +56,41 @@ JSX_TEMPLATE = """
 app.preferences.rulerUnits = Units.PIXELS;
 app.preferences.typeUnits = TypeUnits.PIXELS;
 
-// 定义错误日志文件路径
+// 定义错误日志与执行日志文件路径
 var ERROR_FILE_PATH = '{error_file}';
+var LOG_FILE_PATH = '{log_file}';
+
+function psLog(msg) {{
+    $.writeln(msg);
+    try {{
+        var lf = new File(LOG_FILE_PATH);
+        lf.encoding = 'UTF-8';
+        lf.open('a');
+        lf.writeln(msg);
+        lf.close();
+    }} catch (logErr) {{}}
+}}
 
 // 字体查找函数：根据字体名称查找 PostScript 名称
-// Photoshop 的 textItem.font 需要使用 PostScript 名称
+// 支持 "Family::Style"（如 "Ames::Regular"）格式
 function findFontPostScriptName(fontName) {{
     if (!fontName) return null;
-    
-    var lowerName = fontName.toLowerCase();
+
     var fonts = app.fonts;
+    var sepIdx = fontName.indexOf('::');
+    if (sepIdx !== -1) {{
+        var targetFamily = fontName.substring(0, sepIdx).toLowerCase();
+        var targetStyle = fontName.substring(sepIdx + 2).toLowerCase();
+        for (var i = 0; i < fonts.length; i++) {{
+            if (fonts[i].family.toLowerCase() === targetFamily &&
+                fonts[i].style.toLowerCase() === targetStyle) {{
+                return fonts[i].postScriptName;
+            }}
+        }}
+        fontName = fontName.substring(0, sepIdx);
+    }}
+
+    var lowerName = fontName.toLowerCase();
     
     // 第一轮：精确匹配 PostScript 名称（不区分大小写）
     for (var i = 0; i < fonts.length; i++) {{
@@ -183,19 +208,22 @@ function findTateChuYokoPositions(text) {{
     return positions;
 }}
 
+var _prevDisplayDialogs = app.displayDialogs;
+app.displayDialogs = DialogModes.NO;
+
 try {{
     // 打开原始图片
     var inputFile = new File('{input_file}');
     
     // 检查文件是否存在
     if (!inputFile.exists) {{
-        $.writeln('ERROR: Input file does not exist: ' + inputFile.fsName);
+        psLog('ERROR: Input file does not exist: ' + inputFile.fsName);
         throw new Error('Input file does not exist: ' + inputFile.fsName);
     }}
     
-    $.writeln('Opening input file: ' + inputFile.fsName);
+    psLog('Opening input file: ' + inputFile.fsName);
     var doc = app.open(inputFile);
-    $.writeln('Document opened successfully');
+    psLog('Document opened successfully');
     
     // 设置文档颜色模式为 RGB（如果不是的话）
     try {{
@@ -244,7 +272,7 @@ try {{
     
     // 保存为 PSD
     var psdFile = new File('{output_file}');
-    $.writeln('Saving PSD to: ' + psdFile.fsName);
+    psLog('Saving PSD to: ' + psdFile.fsName);
     var psdOptions = new PhotoshopSaveOptions();
     psdOptions.embedColorProfile = true;
     psdOptions.alphaChannels = true;
@@ -252,22 +280,25 @@ try {{
     psdOptions.spotColors = true;
     
     doc.saveAs(psdFile, psdOptions, true);
-    $.writeln('PSD saved successfully');
+    psLog('PSD saved successfully');
     doc.close(SaveOptions.DONOTSAVECHANGES);
-    $.writeln('Document closed');
+    psLog('Document closed');
+    app.displayDialogs = _prevDisplayDialogs;
     
 }} catch (e) {{
+    app.displayDialogs = _prevDisplayDialogs;
     var errorMsg = 'ERROR: ' + e.message + '\\nLine: ' + e.line + '\\nFile: ' + (e.fileName || 'unknown');
-    $.writeln(errorMsg);
+    psLog(errorMsg);
     
     // 写入错误文件
     try {{
         var errFile = new File(ERROR_FILE_PATH);
+        errFile.encoding = 'UTF-8';
         errFile.open('w');
         errFile.write(errorMsg);
         errFile.close();
     }} catch (writeErr) {{
-        $.writeln('Failed to write error file: ' + writeErr.message);
+        psLog('Failed to write error file: ' + writeErr.message);
     }}
 }}
 """
@@ -455,9 +486,22 @@ def generate_text_layer_jsx(index: int, text_region, default_font: str, line_spa
     
     logger.debug(f"Text layer {index}: source='{' '.join(text_region.text)[:30]}', translation='{raw_text[:30]}'")
     
-    # 位置和尺寸 - 使用渲染阶段计算的 dst_points
-    # dst_points 是 shape (1, 4, 2) 的数组，包含4个角点
-    pts = text_region.dst_points.reshape(-1, 2)
+    # 位置和尺寸 - 优先使用渲染阶段计算的 dst_points，回退 min_rect / lines / xyxy
+    import numpy as np
+
+    raw_pts = getattr(text_region, "dst_points", None)
+    if raw_pts is None:
+        raw_pts = getattr(text_region, "min_rect", None)
+    if raw_pts is None:
+        lines = getattr(text_region, "lines", None)
+        if lines is not None and len(lines) > 0:
+            raw_pts = np.asarray(lines)
+        elif getattr(text_region, "xyxy", None) is not None:
+            x1, y1, x2, y2 = [float(v) for v in text_region.xyxy]
+            raw_pts = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float32)
+    if raw_pts is None:
+        raise ValueError(f"Text region {index} has no dst_points or bounding geometry")
+    pts = np.asarray(raw_pts).reshape(-1, 2)
     x_min = float(pts[:, 0].min())
     y_min = float(pts[:, 1].min())
     x_max = float(pts[:, 0].max())
@@ -557,43 +601,32 @@ def generate_text_layer_jsx(index: int, text_region, default_font: str, line_spa
     
     # 字体设置代码
     if default_font:
+        safe_font = escape_jsx_string(default_font)
         font_setup_code = f"""// 查找字体的 PostScript 名称
-    var requestedFont{index} = '{default_font}';
+    var requestedFont{index} = '{safe_font}';
     var fontPS{index} = findFontPostScriptName(requestedFont{index});
     
     if (!fontPS{index}) {{
-        var msg = 'Font not found: "' + requestedFont{index} + '". Please install this font or use a different font.';
-        $.writeln('ERROR: ' + msg);
-        var errFile = new File(ERROR_FILE_PATH);
-        errFile.open('w');
-        errFile.write(msg);
-        errFile.close();
-        throw new Error(msg);
-    }}
-    
-    $.writeln('Font mapping: "' + requestedFont{index} + '" -> "' + fontPS{index} + '"');
-    
-    // 设置字体（使用 PostScript 名称）
-    try {{
-        textItem{index}.font = fontPS{index};
-    }} catch (e) {{
-        var msg = 'Failed to set font "' + fontPS{index} + '": ' + e.message;
-        $.writeln('ERROR: ' + msg);
-        var errFile = new File(ERROR_FILE_PATH);
-        errFile.open('w');
-        errFile.write(msg);
-        errFile.close();
-        throw new Error(msg);
+        psLog('WARNING: Font "' + requestedFont{index} + '" not found in Photoshop; falling back to Photoshop default font.');
+    }} else {{
+        psLog('Font mapping: "' + requestedFont{index} + '" -> "' + fontPS{index} + '"');
+        
+        // 设置字体（使用 PostScript 名称）
+        try {{
+            textItem{index}.font = fontPS{index};
+        }} catch (e) {{
+            psLog('WARNING: Failed to set font "' + fontPS{index} + '": ' + e.message + '; falling back to Photoshop default font.');
+        }}
     }}
 """
     else:
         font_setup_code = f"""// 使用 Photoshop 默认字体
-    $.writeln('Using Photoshop default font for layer {index}');
+    psLog('Using Photoshop default font for layer {index}');
 """
     
     # 文本层名称：使用译文，但必须移除所有换行符以免破坏 JSX 语法
     # 1. 删除 [BR] 及全角 【BR】 (替换为空字符串)
-    safe_name = re.sub(r'\s*(?:\[|【)BR(?:\]|】)\s*', '', text_region.translation, flags=re.IGNORECASE)
+    safe_name = re.sub(r'\s*(?:\[|【)BR(?:\]|】)\s*', '', raw_text, flags=re.IGNORECASE)
     # 2. 删除所有物理换行符 (替换为空字符串)
     safe_name = re.sub(r'[\r\n\u2028\u2029\v\f]+', '', safe_name)
     # 3. 转义特殊字符并截断
@@ -676,6 +709,25 @@ def _save_image_like_to_temp(image_data, target_path: str) -> bool:
         return False
 
 
+_PHOTOSHOP_NATIVE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".psd", ".psb"}
+
+
+def _ensure_photoshop_compatible_image(image_path: str, temp_png_path: str) -> str:
+    """Convert formats not natively supported by older Photoshop (e.g. .webp) to a temp PNG."""
+    ext = os.path.splitext(image_path)[1].lower()
+    if ext in _PHOTOSHOP_NATIVE_EXTENSIONS:
+        return image_path
+    try:
+        from PIL import Image
+        with Image.open(image_path) as img:
+            img.save(temp_png_path, format="PNG")
+        logger.debug(f"Converted {os.path.basename(image_path)} -> temporary PNG for Photoshop: {temp_png_path}")
+        return temp_png_path
+    except Exception as e:
+        logger.warning(f"Failed to convert {image_path} to temporary PNG, using original path: {e}")
+        return image_path
+
+
 def photoshop_export(output_file: str, ctx: Context, default_font: str = None, image_path: str = None, verbose: bool = False, result_path_fn=None, line_spacing: float = None, script_only: bool = False):
     """
     使用 Photoshop 导出 PSD 文件
@@ -706,19 +758,22 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
         logger.warning("Tip: Select a font name from the system font list instead of using a font file path")
         default_font = font_basename
     
-    # 创建临时文件（只用于修复图和遮罩）
+    # 创建临时文件（只用于修复图、遮罩和兼容转换）
     temp_dir = tempfile.gettempdir()
+    original_temp_file = os.path.join(temp_dir, ".ps_original.png")
     inpainted_file = os.path.join(temp_dir, ".ps_inpainted.png")
     mask_file = os.path.join(temp_dir, ".ps_mask.png")
     jsx_file = os.path.join(temp_dir, ".ps_script.jsx")
     error_file = os.path.join(temp_dir, ".ps_error.txt")
+    log_file = os.path.join(temp_dir, ".ps_log.txt")
     
-    # 清理旧的错误文件
-    if os.path.exists(error_file):
-        try:
-            os.unlink(error_file)
-        except Exception:
-            pass
+    # 清理旧的错误文件与日志
+    for old_tmp in (error_file, log_file):
+        if os.path.exists(old_tmp):
+            try:
+                os.unlink(old_tmp)
+            except Exception:
+                pass
     
     try:
         # PSD底图优先使用 editor_base，保持与编辑器中的“原图层”一致
@@ -734,10 +789,12 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
         else:
             input_file = image_path
             logger.info(f"Falling back to the original image as the PSD base image: {input_file}")
+        if not script_only:
+            input_file = _ensure_photoshop_compatible_image(input_file, original_temp_file)
 
         # 修复图优先使用当前会话结果，避免吃到磁盘旧图
         inpainted_layer_code = ""
-        if hasattr(ctx, 'img_inpainted') and ctx.img_inpainted is not None and _save_image_like_to_temp(ctx.img_inpainted, inpainted_file):
+        if not script_only and hasattr(ctx, 'img_inpainted') and ctx.img_inpainted is not None and _save_image_like_to_temp(ctx.img_inpainted, inpainted_file):
             inpainted_layer_code = INPAINTED_LAYER_TEMPLATE.format(
                 inpainted_file=escape_jsx_path(inpainted_file)
             )
@@ -745,8 +802,13 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
         elif image_path:
             inpainted_path = get_inpainted_path(image_path, create_dir=False)
             if os.path.exists(inpainted_path):
+                compatible_inpainted = (
+                    inpainted_path
+                    if script_only
+                    else _ensure_photoshop_compatible_image(inpainted_path, inpainted_file)
+                )
                 inpainted_layer_code = INPAINTED_LAYER_TEMPLATE.format(
-                    inpainted_file=escape_jsx_path(inpainted_path)
+                    inpainted_file=escape_jsx_path(compatible_inpainted)
                 )
                 logger.info(f"Falling back to the working directory for the PSD inpainted image: {inpainted_path}")
             else:
@@ -773,6 +835,7 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
             input_file=escape_jsx_path(input_file),
             output_file=escape_jsx_path(output_file),
             error_file=escape_jsx_path(error_file),
+            log_file=escape_jsx_path(log_file),
             inpainted_layer_code=inpainted_layer_code,
             mask_layer_code=mask_layer_code,
             text_layers_code=text_layers_code,
@@ -849,6 +912,10 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
         while elapsed < timeout:
             time.sleep(poll_interval)
             elapsed += poll_interval
+
+            if os.path.exists(error_file):
+                time.sleep(0.1)
+                break
             
             # 检查 PSD 文件是否生成/更新
             if os.path.exists(output_file):
@@ -858,6 +925,15 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
                     time.sleep(0.5)
                     break
         
+        # 读取 Photoshop JSX 执行日志（如有）
+        ps_log_text = ""
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, 'r', encoding='utf-8', errors='replace') as lf:
+                    ps_log_text = lf.read().strip()
+            except Exception as log_read_err:
+                logger.warning(f"Failed to read Photoshop JSX log: {log_read_err}")
+
         # 读取输出（非阻塞）
         try:
             stdout, stderr = process.communicate(timeout=1)
@@ -873,15 +949,26 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
             
         # 检查是否有脚本错误报告
         if os.path.exists(error_file):
-            with open(error_file, 'r') as f:
+            with open(error_file, 'r', encoding='utf-8', errors='replace') as f:
                 error_msg = f.read()
+            if ps_log_text:
+                logger.error(f"Photoshop JSX trace:\n{ps_log_text}")
             logger.error(f"Photoshop script execution error: {error_msg}")
             raise RuntimeError(f'Photoshop script error: {error_msg}')
         
         # 检查 PSD 文件是否成功生成
         if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+            if ps_log_text and verbose:
+                logger.debug(f"Photoshop JSX trace:\n{ps_log_text}")
             logger.info(f"PSD file generated: {output_file}")
         else:
+            if ps_log_text:
+                logger.error(f"Photoshop JSX trace before failure:\n{ps_log_text}")
+            else:
+                logger.error(
+                    "Photoshop did not write any JSX trace (.ps_log.txt); "
+                    "Photoshop may have blocked on a startup dialog or failed to execute the script."
+                )
             if elapsed >= timeout:
                 raise RuntimeError(f'Photoshop execution timed out ({timeout}s); PSD file was not generated')
             else:
@@ -889,7 +976,7 @@ def photoshop_export(output_file: str, ctx: Context, default_font: str = None, i
         
     finally:
         # 清理临时文件
-        for temp_file in [inpainted_file, mask_file, error_file]:
+        for temp_file in [original_temp_file, inpainted_file, mask_file, error_file, log_file]:
             if os.path.exists(temp_file):
                 try:
                     os.unlink(temp_file)
